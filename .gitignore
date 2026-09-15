@@ -1,0 +1,5 @@
+# Local editor, CodeGraph, and test artefacts
+*.swp
+*.tmp
+/.codegraph/
+/test-results/
