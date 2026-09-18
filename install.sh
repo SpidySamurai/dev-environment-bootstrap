@@ -14,6 +14,10 @@ source "$ROOT_DIR/lib/platform.sh"
 source "$ROOT_DIR/lib/ui.sh"
 # shellcheck source=lib/installer.sh
 source "$ROOT_DIR/lib/installer.sh"
+# shellcheck source=lib/privileges.sh
+source "$ROOT_DIR/lib/privileges.sh"
+# shellcheck source=lib/config.sh
+source "$ROOT_DIR/lib/config.sh"
 
 print_summary() {
   local module
@@ -50,13 +54,7 @@ main() {
   validate_host
 
   local -a selected=()
-  if [[ -n $REQUESTED_MODULES ]]; then
-    mapfile -t selected < <(expand_requested_modules "$REQUESTED_MODULES")
-  elif ((NON_INTERACTIVE)); then
-    selected=()
-  else
-    mapfile -t selected < <(choose_optional_modules)
-  fi
+  mapfile -t selected < <(default_selected_modules)
 
   resolve_modules "${selected[@]}"
   print_summary
@@ -66,16 +64,24 @@ main() {
     printf '%s\n' 'Dry run complete: no installation commands were executed.'
     return 0
   fi
-  if ! confirm_plan; then
+  if ! confirm_full_install; then
     printf '%s\n' 'Installation cancelled.'
     return 0
   fi
 
-  execute_plan
-  cat <<'EOF'
+  negotiate_privileges || true
+
+  local exec_rc=0
+  execute_plan || exec_rc=$?
+  if ((exec_rc == 0)); then
+    cat <<'EOF'
 Bootstrap complete. Open a new terminal, start Zsh, and run `p10k configure` if needed.
 Run `gh auth login` and each provider's login command manually; configure SSH keys manually.
 EOF
+  else
+    printf '%s\n' 'Bootstrap finished with failures. Review the installation report above.' >&2
+  fi
+  return "$exec_rc"
 }
 
 main "$@"

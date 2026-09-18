@@ -11,10 +11,15 @@ usage() {
   cat <<'EOF'
 Usage: ./install.sh [options]
 
+Default flow: show the plan, ask a single yes/no question
+("Install the complete Spidy environment? [Y/n]"), then install everything.
+
 Options:
   --dry-run                 Print the installation plan without changing the host.
-  --non-interactive         Do not prompt; install mandatory modules and --modules.
-  --modules <ids|all>       Comma-separated optional module IDs, or "all".
+  --non-interactive         Do not prompt; implies --yes for the confirmation.
+  --modules <ids|all>       Advanced escape hatch: comma-separated optional
+                             module IDs (or "all") for a partial install,
+                             instead of the default complete-environment flow.
   --yes                     Confirm the displayed plan without prompting.
   --audit                   Inspect module status without changing the host.
   --help                    Show this help text.
