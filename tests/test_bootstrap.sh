@@ -51,6 +51,21 @@ assert_not_contains() {
   fi
 }
 
+# Counts panel bullet lines ("  - <title>...") whose title is exactly
+# $title, not merely a substring match somewhere in a longer title (e.g.
+# "herdr" is a literal substring of the unrelated spidy-config title).
+count_module_title_lines() {
+  local title=$1 haystack=$2 line remainder n=0
+  while IFS= read -r line; do
+    [[ "$line" == '  - '* ]] || continue
+    remainder=${line#  - }
+    if [[ "$remainder" == "$title" || "$remainder" == "$title "* ]]; then
+      n=$((n + 1))
+    fi
+  done <<<"$haystack"
+  printf '%s' "$n"
+}
+
 test_argument_parsing() {
   parse_args --dry-run --non-interactive --modules cli-modern,docker
   assert_eq "1" "$DRY_RUN" "--dry-run is parsed"
@@ -546,6 +561,55 @@ test_execute_plan_reports_skipped_and_manual_modules() {
   assert_contains 'skipped' "$output" "already-installed modules are reported as skipped"
 }
 
+# BUG 3: captured module stderr went into the report Detail column verbatim.
+# A tool like curl redraws its progress meter in place using carriage
+# returns, not newlines, so the whole meter is one giant "line" that blew out
+# the fixed-width installation report table.
+test_sanitize_module_reason_reduces_progress_meter_noise_to_one_line() {
+  local raw sanitized
+  raw=$'  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\r                                 Dload  Upload   Total   Spent    Left  Speed\r100  1256  100  1256    0     0   1256      0  0:00:01 --:--:--  0:00:01  4189\rcurl: (22) The requested URL returned error: 404'
+  sanitized=$(sanitize_module_reason "$raw")
+
+  assert_not_contains $'\r' "$sanitized" "sanitized reasons never carry a raw carriage return"
+  assert_not_contains 'Dload' "$sanitized" "sanitized reasons drop curl progress-meter noise"
+  assert_eq 'curl: (22) The requested URL returned error: 404' "$sanitized" "sanitized reasons keep the last meaningful line"
+}
+
+test_sanitize_module_reason_truncates_long_lines() {
+  local raw sanitized
+  raw=$(printf 'x%.0s' {1..500})
+  sanitized=$(sanitize_module_reason "$raw")
+  if ((${#sanitized} <= 210)); then
+    printf 'PASS: %s\n' 'long reasons are truncated to a sensible width'
+  else
+    printf 'FAIL: %s\n' 'long reasons are truncated to a sensible width' >&2
+    failures=$((failures + 1))
+  fi
+}
+
+test_run_module_isolated_report_detail_is_readable_after_progress_meter_noise() {
+  local output
+  output=$({
+    RESOLVED_MODULES=(fake-noisy-fail)
+    MANDATORY_MODULES=()
+    MODULE_KIND[fake-noisy-fail]=apt
+    MODULE_TITLE[fake-noisy-fail]='Fake noisy module'
+    MODULE_PACKAGES[fake-noisy-fail]='fake-noisy-package'
+    PRIVILEGES_AVAILABLE=1
+    module_install_status() { return 1; }
+    apt_install() {
+      printf '  %% Total    %% Received %% Xferd  Average Speed   Time    Time     Time  Current\r                                 Dload  Upload   Total   Spent    Left  Speed\r100  1256  100  1256    0     0   1256      0  0:00:01 --:--:--  0:00:01  4189\rcurl: (22) The requested URL returned error: 404\n' >&2
+      return 1
+    }
+    log() { :; }
+    run_module_isolated fake-noisy-fail >/dev/null 2>&1
+    printf 'REASON=%s\n' "${MODULE_REASON[fake-noisy-fail]}"
+  })
+  assert_contains 'REASON=curl: (22) The requested URL returned error: 404' "$output" \
+    "the execution report keeps a single readable line after progress-meter noise"
+  assert_not_contains 'Dload' "$output" "the execution report drops curl progress-meter noise"
+}
+
 test_negotiate_privileges_skips_sudo_when_not_needed() {
   local output
   output=$({
@@ -593,6 +657,7 @@ test_negotiate_privileges_acquires_and_releases_keepalive() {
   local pid_before
   pid_before=$(
     RESOLVED_MODULES=(base-packages)
+    request_sudo_cached() { return 1; }
     request_sudo_interactively() { return 0; }
     has_readable_tty() { return 0; }
     log() { :; }
@@ -605,6 +670,59 @@ test_negotiate_privileges_acquires_and_releases_keepalive() {
     printf '%s\n' 'FAIL: the sudo keepalive process is stopped once the negotiation scope ends' >&2
     failures=$((failures + 1))
   fi
+}
+
+# BUG 1: negotiate_privileges branched on has_readable_tty, which tested
+# `[[ -r /dev/tty ]]` — file-permission bits, not whether a controlling
+# terminal could actually be opened. Under `curl | bash` with no controlling
+# terminal, -r can still report true, so the installer took the interactive
+# branch, `sudo -v </dev/tty` failed, and the correct request_sudo_cached
+# fallback was never reached. These tests pin the fixed contract: sudo -n -v
+# (cached/passwordless, never prompts) is always tried first, and interactive
+# prompting is attempted only if that fails and a real tty exists.
+test_negotiate_privileges_succeeds_via_cached_sudo_even_when_readable_tty_is_wrong() {
+  local output
+  output=$({
+    RESOLVED_MODULES=(base-packages)
+    has_readable_tty() { return 0; }
+    request_sudo_interactively() { return 1; }
+    request_sudo_cached() { return 0; }
+    log() { printf '%s\n' "$*" >&2; }
+    negotiate_privileges
+    printf 'PRIVILEGES_AVAILABLE=%s\n' "$PRIVILEGES_AVAILABLE"
+  } 2>&1)
+  assert_contains 'PRIVILEGES_AVAILABLE=1' "$output" \
+    "cached/passwordless sudo succeeds privileges even when the tty check would otherwise force the (failing) interactive path"
+}
+
+test_negotiate_privileges_never_prompts_interactively_when_cached_sudo_works() {
+  local output
+  output=$({
+    RESOLVED_MODULES=(base-packages)
+    has_readable_tty() { return 0; }
+    request_sudo_cached() { return 0; }
+    request_sudo_interactively() { printf 'FORBIDDEN: interactive sudo prompt attempted\n' >&2; return 1; }
+    log() { printf '%s\n' "$*" >&2; }
+    negotiate_privileges
+    printf 'PRIVILEGES_AVAILABLE=%s\n' "$PRIVILEGES_AVAILABLE"
+  } 2>&1)
+  assert_not_contains 'FORBIDDEN' "$output" "cached sudo success never triggers an interactive prompt"
+  assert_contains 'PRIVILEGES_AVAILABLE=1' "$output" "cached sudo success alone grants privileges"
+}
+
+test_negotiate_privileges_prompts_interactively_only_after_cached_sudo_fails_with_a_real_tty() {
+  local output
+  output=$({
+    RESOLVED_MODULES=(base-packages)
+    has_readable_tty() { return 0; }
+    request_sudo_cached() { return 1; }
+    request_sudo_interactively() { printf 'INTERACTIVE_PROMPT_ATTEMPTED\n'; return 0; }
+    log() { printf '%s\n' "$*" >&2; }
+    negotiate_privileges
+    printf 'PRIVILEGES_AVAILABLE=%s\n' "$PRIVILEGES_AVAILABLE"
+  } 2>&1)
+  assert_contains 'INTERACTIVE_PROMPT_ATTEMPTED' "$output" "interactive sudo is attempted once cached sudo fails and a real tty exists"
+  assert_contains 'PRIVILEGES_AVAILABLE=1' "$output" "a successful interactive prompt still grants privileges"
 }
 
 test_apt_module_fails_cleanly_without_privileges() {
@@ -886,10 +1004,16 @@ test_module_path_probe_uses_catalog_metadata
 test_execute_plan_isolates_module_failures
 test_execute_plan_optional_failure_exits_zero
 test_execute_plan_reports_skipped_and_manual_modules
+test_sanitize_module_reason_reduces_progress_meter_noise_to_one_line
+test_sanitize_module_reason_truncates_long_lines
+test_run_module_isolated_report_detail_is_readable_after_progress_meter_noise
 test_negotiate_privileges_skips_sudo_when_not_needed
 test_negotiate_privileges_reports_missing_sudo
 test_negotiate_privileges_falls_back_without_tty
 test_negotiate_privileges_acquires_and_releases_keepalive
+test_negotiate_privileges_succeeds_via_cached_sudo_even_when_readable_tty_is_wrong
+test_negotiate_privileges_never_prompts_interactively_when_cached_sudo_works
+test_negotiate_privileges_prompts_interactively_only_after_cached_sudo_fails_with_a_real_tty
 test_apt_module_fails_cleanly_without_privileges
 test_catalog_matches_measured_real_sources
 test_agent_cli_modules_use_verified_installer_urls
@@ -914,7 +1038,142 @@ test_oh_my_zsh_pins_its_install_directory() {
 }
 
 test_install_script_modules_pipe_to_their_interpreter
+# Raised by the RDD reliability reviewer on the candidate that added these keys:
+# the shipped template had no check that it stays valid JSON or keeps the plugin
+# pointers. Without them a new user silently loses Engram, this environment's
+# persistent memory.
+assert_template_is_valid_json_with_plugins() {
+  local template=$1 label=$2 expect_valid=$3 output rc=0
+  output=$(python3 -c "
+import json,sys
+d=json.load(open(sys.argv[1]))
+assert d['enabledPlugins']['engram@engram'] is True
+assert d['enabledPlugins']['voicemode@voicemode'] is True
+assert d['extraKnownMarketplaces']['engram']['source']['repo']
+assert d['extraKnownMarketplaces']['voicemode']['source']['repo']
+" "$template" 2>&1) || rc=$?
+  if [[ $expect_valid == yes ]]; then
+    assert_eq '0' "$rc" "$label"
+  else
+    [[ $rc -ne 0 ]] && printf 'PASS: %s\n' "$label" || { printf 'FAIL: %s\n' "$label"; failures=$((failures + 1)); }
+  fi
+}
+
+test_shipped_claude_settings_template_keeps_its_plugins() {
+  local broken
+  assert_template_is_valid_json_with_plugins \
+    "$ROOT_DIR/config/agents/claude/settings.template.json" \
+    "the shipped Claude settings template is valid JSON and still enables Engram and voicemode" yes
+
+  # The guard is only worth having if it actually detects a regression.
+  broken=$(mktemp)
+  python3 -c "
+import json,sys
+d=json.load(open(sys.argv[1]))
+del d['enabledPlugins']['engram@engram']
+json.dump(d, open(sys.argv[2],'w'))
+" "$ROOT_DIR/config/agents/claude/settings.template.json" "$broken"
+  assert_template_is_valid_json_with_plugins "$broken" \
+    "the same guard fails when the Engram plugin pointer is dropped" no
+  rm -f "$broken"
+}
+
 test_oh_my_zsh_pins_its_install_directory
+# R2 / R3-template-guard-counter: the guard's negative control incremented an
+# upper-case counter the suite never reads, so it could print FAIL and still
+# let the suite exit 0. A check that cannot fail the suite is not a check.
+test_every_failure_branch_uses_the_suite_counter() {
+  local stray
+  # The class bracket keeps this pattern from matching its own source line.
+  stray=$(grep -nE 'FAILURE[S]=' "$ROOT_DIR/tests/test_bootstrap.sh" || true)
+  assert_eq '' "$stray" "no failure branch increments a counter the suite never reads"
+}
+
+# R1-claude-plugin-autotrust: the template auto-enables two unpinned third-party
+# GitHub marketplaces. The operator must at least be told which upstreams the
+# install trusts, including the one outside the author's namespace.
+test_readme_discloses_the_auto_trusted_plugin_upstreams() {
+  local readme
+  readme=$(cat "$ROOT_DIR/README.md")
+  assert_contains 'Gentleman-Programming/engram' "$readme" \
+    "the README names the engram plugin upstream the install trusts"
+  assert_contains 'mbailey/voicemode' "$readme" \
+    "the README names the voicemode plugin upstream, which is outside the author's namespace"
+}
+
+test_shipped_claude_settings_template_keeps_its_plugins
+# Found by a clean full install in a container: rust was the only module that
+# failed, with `curl: (23) Failure writing output to destination`. Root cause is
+# a contract bug, not the network: run_remote_script could only forward ENV
+# assignments, so rustup's interpreter arguments (`-s -- -y`) were handed to
+# `env`, which died with "invalid option -- 's'" and closed the pipe.
+test_run_remote_script_separates_env_from_interpreter_arguments() {
+  local output
+  output=$({
+    curl() { printf 'script-body\n'; }
+    env() { printf 'ENV_ARGS:%s\n' "$*"; }
+    run_remote_script https://example.invalid/x sh -- -s -- -y
+  } 2>&1)
+
+  assert_contains 'ENV_ARGS:sh -s -- -y' "$output" \
+    "interpreter arguments reach the interpreter instead of being parsed as env assignments"
+  assert_not_contains 'ENV_ARGS:-s' "$output" \
+    "interpreter arguments are never passed to env as assignments"
+}
+
+test_run_remote_script_still_forwards_env_assignments() {
+  local output
+  output=$({
+    curl() { printf 'script-body\n'; }
+    env() { printf 'ENV_ARGS:%s\n' "$*"; }
+    run_remote_script https://example.invalid/x bash KEEP_ZSHRC=yes RUNZSH=no
+  } 2>&1)
+
+  assert_contains 'ENV_ARGS:KEEP_ZSHRC=yes RUNZSH=no bash' "$output" \
+    "env assignments still reach env, ahead of the interpreter"
+}
+
+test_rust_module_invokes_its_interpreter_with_unattended_flags() {
+  local output
+  output=$({
+    run_remote_script() { printf 'CALL:%s\n' "$*"; }
+    perform_module_install rust rustup
+  } 2>&1)
+
+  assert_contains -- "$output" "the rust module passes a separator so its flags are interpreter arguments"
+  assert_contains '-s' "$output" "the rust module keeps rustup's unattended flags"
+  assert_contains '-y' "$output" "the rust module keeps rustup's -y flag"
+}
+
+# Found by running the installer in a real throwaway WSL distribution: after
+# spidy-config had just replaced ~/.zshrc (with a backup), the run still printed
+# "Preserving existing ~/.zshrc; no shell configuration was overwritten" and
+# advised setting ZSH_THEME by hand — which the shipped file already sets.
+# configure_zsh predates spidy-config and now only emits contradictions.
+test_execute_plan_does_not_claim_to_preserve_a_replaced_zshrc() {
+  local fake_home output
+  fake_home=$(mktemp -d)
+  printf 'pre-existing\n' >"$fake_home/.zshrc"
+
+  output=$({
+    HOME=$fake_home
+    RESOLVED_MODULES=()
+    execute_plan
+  } 2>&1)
+
+  assert_not_contains 'no shell configuration was overwritten' "$output" \
+    "the run never claims it preserved a shell configuration that spidy-config owns"
+  assert_not_contains 'set ZSH_THEME' "$output" \
+    "the run never tells the user to set a theme the shipped zshrc already sets"
+  rm -rf "$fake_home"
+}
+
+test_every_failure_branch_uses_the_suite_counter
+test_execute_plan_does_not_claim_to_preserve_a_replaced_zshrc
+test_run_remote_script_separates_env_from_interpreter_arguments
+test_run_remote_script_still_forwards_env_assignments
+test_rust_module_invokes_its_interpreter_with_unattended_flags
+test_readme_discloses_the_auto_trusted_plugin_upstreams
 test_agent_codex_dry_run_plan_installs_via_npm
 test_install_script_dry_run_plan_prints_the_real_command
 test_opencode_installed_probe_uses_its_own_binary_path
@@ -1299,6 +1558,196 @@ test_config_module_execution_reports_ok() {
   rm -rf "$fake_home"
 }
 
+# The owner's decision: gentle-ai only needs to be downloaded (agent-gentle-ai
+# stays). The installer's responsibility for gentle-ai stops there; the user
+# runs `gentle-ai` themselves afterwards and configures it through its own
+# interface. This pins the removed state: no gentle-ai-config module, no
+# GENTLE_AI_CONFIG_* selection, and no automatic `review mode enable`.
+test_gentle_ai_config_module_is_removed_from_the_catalog() {
+  if module_exists gentle-ai-config; then
+    printf 'FAIL: %s\n' "gentle-ai-config is no longer a catalog module" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s\n' "gentle-ai-config is no longer a catalog module"
+  fi
+
+  assert_not_contains 'gentle-ai-config' "${MODULE_IDS[*]}" "gentle-ai-config is not in MODULE_IDS"
+  assert_not_contains 'gentle-ai-config' "${OPTIONAL_MODULES[*]}" "gentle-ai-config is not in OPTIONAL_MODULES"
+
+  local plan
+  plan=$(bash "$ROOT_DIR/install.sh" --dry-run --non-interactive --modules all 2>&1)
+  assert_not_contains 'gentle-ai-config' "$plan" "the resolved --modules all plan no longer includes gentle-ai-config"
+  assert_not_contains 'review mode enable' "$plan" "the resolved --modules all plan no longer enables receipt-driven development automatically"
+  assert_contains 'agent-gentle-ai' "$plan" "the resolved --modules all plan still installs the gentle-ai CLI itself"
+
+  if declare -f perform_gentle_ai_config_install >/dev/null 2>&1; then
+    printf 'FAIL: %s\n' "perform_gentle_ai_config_install no longer exists" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s\n' "perform_gentle_ai_config_install no longer exists"
+  fi
+}
+
+test_module_panel_lists_every_resolved_module_exactly_once() {
+  resolve_modules "${OPTIONAL_MODULES[@]}"
+  local output module occurrences
+  output=$(render_module_panel)
+  for module in "${RESOLVED_MODULES[@]}"; do
+    occurrences=$(count_module_title_lines "${MODULE_TITLE[$module]}" "$output")
+    assert_eq "1" "$occurrences" "the panel lists '$module' exactly once"
+  done
+}
+
+test_module_panel_shows_overall_total() {
+  resolve_modules "${OPTIONAL_MODULES[@]}"
+  local output
+  output=$(render_module_panel)
+  assert_contains "Total modules: ${#RESOLVED_MODULES[@]}" "$output" "the panel states the overall total module count"
+}
+
+test_module_panel_uses_fallback_group_for_a_module_without_a_configured_group() {
+  local saved_group=${MODULE_GROUP[github-cli]-}
+  unset 'MODULE_GROUP[github-cli]'
+  resolve_modules github-cli
+  local output
+  output=$(render_module_panel)
+  assert_contains "$UI_FALLBACK_GROUP" "$output" "a module with no MODULE_GROUP entry falls back to the default group"
+  assert_eq "1" "$(count_module_title_lines "${MODULE_TITLE[github-cli]}" "$output")" \
+    "the fallback-grouped module still appears in the panel instead of being dropped"
+  MODULE_GROUP[github-cli]=$saved_group
+}
+
+test_module_panel_group_counts_match_listed_modules() {
+  resolve_modules "${OPTIONAL_MODULES[@]}"
+  local output line group="" declared=0 count=0 mismatches=""
+  output=$(render_module_panel)
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^([A-Za-z][A-Za-z0-9\ /()-]*)\ \(([0-9]+)\)$ ]]; then
+      if [[ -n "$group" && "$count" -ne "$declared" ]]; then
+        mismatches+="$group:declared=$declared:actual=$count;"
+      fi
+      group=${BASH_REMATCH[1]}
+      declared=${BASH_REMATCH[2]}
+      count=0
+    elif [[ "$line" == '  - '* ]]; then
+      count=$((count + 1))
+    fi
+  done <<<"$output"
+  if [[ -n "$group" && "$count" -ne "$declared" ]]; then
+    mismatches+="$group:declared=$declared:actual=$count;"
+  fi
+  assert_eq "" "$mismatches" "every group heading's declared count matches the number of modules listed under it"
+}
+
+test_module_panel_marks_mandatory_modules() {
+  resolve_modules "${OPTIONAL_MODULES[@]}"
+  local output module
+  output=$(render_module_panel)
+  for module in "${MANDATORY_MODULES[@]}"; do
+    assert_contains "${MODULE_TITLE[$module]} (mandatory)" "$output" "mandatory module '$module' is marked (mandatory) in the panel"
+  done
+  assert_not_contains "${MODULE_TITLE[cli-modern]} (mandatory)" "$output" "a non-mandatory module is not marked (mandatory)"
+}
+
+test_module_panel_plain_mode_has_no_ansi_escapes_when_no_color_is_set() {
+  resolve_modules "${OPTIONAL_MODULES[@]}"
+  local output
+  output=$(NO_COLOR=1 render_module_panel)
+  assert_not_contains $'\e[' "$output" "NO_COLOR disables ANSI escape sequences in the panel"
+  assert_contains "${MODULE_TITLE[base-packages]}" "$output" "the plain-mode panel still contains real module content"
+}
+
+test_module_panel_plain_mode_has_no_ansi_escapes_on_a_dumb_terminal() {
+  resolve_modules "${OPTIONAL_MODULES[@]}"
+  local output
+  output=$(TERM=dumb render_module_panel)
+  assert_not_contains $'\e[' "$output" "TERM=dumb disables ANSI escape sequences in the panel"
+}
+
+test_install_entrypoint_renders_grouped_panel() {
+  local output
+  output=$(bash "$ROOT_DIR/install.sh" --dry-run --non-interactive --modules all 2>&1)
+  assert_contains 'Installation summary' "$output" "the install entrypoint still prints the summary heading"
+  assert_contains 'Mandatory baseline (5)' "$output" "the install entrypoint groups mandatory modules under their catalog group with a count"
+  assert_contains 'Authentication, API keys, provider login, and SSH keys are manual' "$output" \
+    "the install entrypoint keeps the manual-steps notice"
+}
+
+# Regression test for a broken box: on a real pty, long titles plus the old
+# verbose "— installed (managed source), will be skipped" suffix pushed
+# lines past the right border. Every non-blank rendered line, ANSI stripped,
+# must land at the identical visible width.
+test_module_panel_fancy_mode_lines_have_identical_visible_width() {
+  resolve_modules "${OPTIONAL_MODULES[@]}"
+  local output line output_width first_width="" mismatch=0
+  output=$(COLUMNS=78 render_module_panel_fancy)
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    output_width=$(visible_length "$line")
+    if [[ -z "$first_width" ]]; then
+      first_width=$output_width
+    elif [[ "$output_width" != "$first_width" ]]; then
+      mismatch=1
+    fi
+  done <<<"$output"
+  assert_eq "0" "$mismatch" "every rendered fancy-mode panel line has the identical visible width (COLUMNS=78)"
+}
+
+test_module_panel_fancy_mode_truncates_an_oversized_title_with_ellipsis() {
+  local LC_ALL=C.UTF-8
+  local saved_title=${MODULE_TITLE[github-cli]}
+  MODULE_TITLE[github-cli]='This is a deliberately absurd module title crafted only to force the fancy panel truncation path for this test'
+  resolve_modules github-cli
+  local output line found=0 matched="" stripped ends_with_ellipsis=0
+  output=$(COLUMNS=44 render_module_panel_fancy)
+  while IFS= read -r line; do
+    if [[ "$line" == *'…'* ]]; then
+      found=1
+      matched=$line
+      break
+    fi
+  done <<<"$output"
+  MODULE_TITLE[github-cli]=$saved_title
+
+  assert_eq "1" "$found" "an oversized module title actually reaches the truncation path (trap guard: fails if nothing matched)"
+  assert_eq "44" "$(visible_length "$matched")" "the truncated line still matches the panel's exact width"
+
+  # Strip the box border ("│ " ... " │") to check the CONTENT itself ends
+  # with the ellipsis — the full box line legitimately ends with the right
+  # border character, not the ellipsis.
+  stripped=$(printf '%s' "$matched" | sed -E $'s/\x1b\\[[0-9;]*m//g')
+  local content=${stripped#│ }
+  content=${content% │}
+  [[ "$content" == *'…' ]] && ends_with_ellipsis=1
+  assert_eq "1" "$ends_with_ellipsis" "the truncated line's content ends with a single ellipsis character"
+}
+
+test_module_panel_marker_reflects_installed_state() {
+  local output_installed output_not_installed
+  output_installed=$(
+    tmux() { :; }
+    packages_installed() { return 1; }
+    module_panel_marker tmux
+  )
+  assert_contains 'already installed' "$output_installed" \
+    "a module module_install_status reports as installed gets the compact marker"
+
+  output_not_installed=$(module_panel_marker nerd-font-guidance)
+  assert_not_contains 'already installed' "$output_not_installed" \
+    "a module that is never pre-detected (guidance kind) has no marker"
+}
+
+test_module_panel_drops_source_provenance_from_the_panel() {
+  local output
+  output=$(
+    tmux() { :; }
+    packages_installed() { return 1; }
+    module_panel_marker tmux
+  )
+  assert_not_contains 'managed source' "$output" "the panel marker does not leak managed/alternate source provenance"
+  assert_not_contains 'alternate source' "$output" "the panel marker does not leak managed/alternate source provenance"
+}
+
 test_bootstrap_rejects_non_ubuntu_host
 test_bootstrap_accepts_ubuntu_2404_host
 test_bootstrap_ensure_git_curl_installs_git_via_apt_when_missing
@@ -1318,6 +1767,19 @@ test_config_install_all_places_expected_destinations
 test_config_module_is_wired_into_the_catalog
 test_config_module_dry_run_entrypoint_includes_it
 test_config_module_execution_reports_ok
+test_gentle_ai_config_module_is_removed_from_the_catalog
+test_module_panel_lists_every_resolved_module_exactly_once
+test_module_panel_shows_overall_total
+test_module_panel_uses_fallback_group_for_a_module_without_a_configured_group
+test_module_panel_group_counts_match_listed_modules
+test_module_panel_marks_mandatory_modules
+test_module_panel_plain_mode_has_no_ansi_escapes_when_no_color_is_set
+test_module_panel_plain_mode_has_no_ansi_escapes_on_a_dumb_terminal
+test_install_entrypoint_renders_grouped_panel
+test_module_panel_fancy_mode_lines_have_identical_visible_width
+test_module_panel_fancy_mode_truncates_an_oversized_title_with_ellipsis
+test_module_panel_marker_reflects_installed_state
+test_module_panel_drops_source_provenance_from_the_panel
 
 if (( failures > 0 )); then
   exit 1

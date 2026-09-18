@@ -20,21 +20,8 @@ source "$ROOT_DIR/lib/privileges.sh"
 source "$ROOT_DIR/lib/config.sh"
 
 print_summary() {
-  local module
-  printf '\n%s\n' 'Installation summary'
-  printf '%s\n' 'Mandatory modules are always included:'
-  for module in "${MANDATORY_MODULES[@]}"; do
-    printf '  - %s\n' "$module"
-  done
-  printf '%s\n' 'Resolved plan:'
-  for module in "${RESOLVED_MODULES[@]}"; do
-    if [[ " ${MANDATORY_MODULES[*]} " == *" $module "* ]]; then
-      printf '  - %s (mandatory)\n' "$module"
-    else
-      printf '  - %s\n' "$module"
-    fi
-  done
-  printf '%s\n\n' 'Authentication, API keys, provider login, and SSH keys are manual and are not installed by this script.'
+  render_module_panel
+  printf '\n%s\n\n' 'Authentication, API keys, provider login, and SSH keys are manual and are not installed by this script.'
 }
 
 main() {

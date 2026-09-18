@@ -6,8 +6,13 @@
 PRIVILEGES_AVAILABLE=${PRIVILEGES_AVAILABLE:-0}
 SUDO_KEEPALIVE_PID=""
 
+# BUG 1 fix: `[[ -r /dev/tty ]]` only checks file-permission bits — it can
+# report true even when there is no real controlling terminal (e.g. under
+# `curl | bash`, setsid, or a detached session), because the device node is
+# still readable by the user even though opening it fails. Actually
+# attempting to open it is the only reliable signal.
 has_readable_tty() {
-  [[ -r /dev/tty ]]
+  { : </dev/tty; } 2>/dev/null
 }
 
 sudo_available() {
@@ -61,16 +66,25 @@ negotiate_privileges() {
     return 1
   fi
 
+  # sudo -n -v is always tried first: it succeeds instantly for passwordless
+  # sudo or already-cached credentials, and -n guarantees it never prompts,
+  # so it is safe to attempt even with no controlling terminal at all. Only
+  # if it fails, and a real controlling terminal actually exists, do we fall
+  # back to an interactive prompt.
+  if request_sudo_cached; then
+    PRIVILEGES_AVAILABLE=1
+    start_sudo_keepalive
+    return 0
+  fi
+
   if has_readable_tty; then
     if ! request_sudo_interactively; then
       log 'Failed to acquire sudo privileges; apt-based modules will report failed (no privileges).'
       return 1
     fi
   else
-    if ! request_sudo_cached; then
-      log 'No interactive terminal is available to request sudo, and no cached sudo credentials were found; apt-based modules will report failed (no privileges).'
-      return 1
-    fi
+    log 'No interactive terminal is available to request sudo, and no cached sudo credentials were found; apt-based modules will report failed (no privileges).'
+    return 1
   fi
 
   PRIVILEGES_AVAILABLE=1

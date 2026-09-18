@@ -216,7 +216,7 @@ perform_module_install() {
       run_remote_script "${MODULE_URL[$module]}" bash
       ;;
     rustup)
-      run_remote_script "${MODULE_URL[$module]}" sh -s -- -y
+      run_remote_script "${MODULE_URL[$module]}" sh -- -s -- -y
       ;;
     npm)
       if npm_provider_is_nvm; then
@@ -362,26 +362,37 @@ config_path_exists() {
   [[ -e $1 || -L $1 ]]
 }
 
-configure_zsh() {
-  local zshrc="$HOME/.zshrc" p10k="$HOME/.p10k.zsh"
-  if config_path_exists "$zshrc"; then
-    log "Preserving existing $zshrc; no shell configuration was overwritten."
-    log 'To enable Powerlevel10k manually, set ZSH_THEME="powerlevel10k/powerlevel10k" in your existing ~/.zshrc.'
-  elif ((DRY_RUN)); then
-    log "[dry-run] Would create $zshrc with the minimal Oh My Zsh and Powerlevel10k configuration."
-  else
-    cat >"$zshrc" <<'EOF'
-export ZSH="$HOME/.oh-my-zsh"
-ZSH_THEME="powerlevel10k/powerlevel10k"
-plugins=(git)
-source "$ZSH/oh-my-zsh.sh"
-[[ -f ~/.p10k.zsh ]] && source ~/.p10k.zsh
-EOF
-    log "Created $zshrc. Run 'p10k configure' in a new Zsh session to create your prompt preferences."
-  fi
+# Reduces captured module stderr to a single readable line for the execution
+# report's Detail column (see BUG 3). A tool like curl redraws its progress
+# meter in place using carriage returns rather than newlines; captured
+# verbatim, the whole meter becomes one enormous "line" with no \n in it,
+# which blows out a fixed-width table. This strips ANSI escapes, treats \r as
+# a line break, drops progress-meter noise, and keeps the last meaningful
+# line, truncated to a sensible width.
+sanitize_module_reason() {
+  local raw=$1 line last_meaningful='' max_width=200
 
-  if config_path_exists "$p10k"; then
-    log "Preserving existing $p10k."
+  raw=$(printf '%s' "$raw" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')
+  raw=${raw//$'\r'/$'\n'}
+
+  while IFS= read -r line; do
+    line=$(printf '%s' "$line" | tr -s '[:space:]' ' ')
+    line=${line#"${line%%[![:space:]]*}"}
+    line=${line%"${line##*[![:space:]]}"}
+    [[ -z $line ]] && continue
+    # curl-style progress-meter noise: its header row ("% Total ..."), the
+    # continuation header row ("Dload  Upload ..."), and its numeric data
+    # rows (digits, percent signs, colons, dots, dashes, and spaces only).
+    [[ $line == '% Total'* ]] && continue
+    [[ $line =~ [Dd]load ]] && continue
+    [[ $line =~ ^[0-9%.:\ -]+$ ]] && continue
+    last_meaningful=$line
+  done <<<"$raw"
+
+  if ((${#last_meaningful} > max_width)); then
+    printf '%s' "${last_meaningful:0:max_width}…"
+  else
+    printf '%s' "$last_meaningful"
   fi
 }
 
@@ -432,7 +443,7 @@ run_module_isolated() {
   else
     exit_code=$?
     MODULE_RESULT[$module]=failed
-    MODULE_REASON[$module]=$(tail -n 5 "$stderr_file" | tr '\n' ' ' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    MODULE_REASON[$module]=$(sanitize_module_reason "$(cat "$stderr_file")")
     [[ -z ${MODULE_REASON[$module]} ]] && MODULE_REASON[$module]="exit code $exit_code"
   fi
   cat "$stderr_file" >&2
@@ -460,9 +471,6 @@ execute_plan() {
     run_module_isolated "$module"
   done
 
-  if ! configure_zsh; then
-    log 'Shell configuration step failed; continuing so the report can still print.'
-  fi
 
   print_execution_report
 

@@ -52,12 +52,33 @@ packages_installed() {
   done
 }
 
+# Usage: run_remote_script <url> <interpreter> [ENV=VALUE ...] [-- <interpreter args> ...]
+#
+# Everything before `--` is an environment assignment for `env`; everything
+# after it is an argument for the interpreter itself. The distinction matters:
+# passing interpreter flags as if they were assignments makes `env` fail with
+# "invalid option", which closes the pipe and surfaces as the misleading
+# `curl: (23) Failure writing output to destination`.
 run_remote_script() {
-  local url=$1 interpreter=$2
+  local url=$1 interpreter=$2 argument
   shift 2
+
+  local -a env_assignments=() interpreter_args=()
+  local past_separator=0
+  for argument in "$@"; do
+    if ((past_separator)); then
+      interpreter_args+=("$argument")
+    elif [[ $argument == -- ]]; then
+      past_separator=1
+    else
+      env_assignments+=("$argument")
+    fi
+  done
+
   # The command is only called outside dry-run; curl refuses HTTP, follows HTTPS
   # redirects, reports errors, and retries transient network failures.
-  curl --fail --show-error --location --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 "$url" | env "$@" "$interpreter"
+  curl --fail --show-error --location --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 "$url" \
+    | env "${env_assignments[@]}" "$interpreter" "${interpreter_args[@]}"
 }
 
 source_nvm() {
