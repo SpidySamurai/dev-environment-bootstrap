@@ -1,0 +1,123 @@
+onboarding = false
+# ~/.config/herdr/config.toml
+# Base: configuración oficial de Gentleman.Dots
+#   https://github.com/Gentleman-Programming/Gentleman.Dots/blob/main/herdr/config.toml
+# + bloque [ui] adaptado a WSL2 / Windows Terminal (ver más abajo).
+
+# ---------------------------------------------------------------------------
+# TEMA — idéntico al de Gentleman
+# ---------------------------------------------------------------------------
+[theme]
+# Base oscura neutra: evita que Herdr herede el bright-black de las filas
+# seleccionadas de Ghostty ni el texto cálido/amarillo de Kanagawa.
+name = "one-dark"
+
+auto_switch = false
+[theme.custom]
+sidebar_bg    = "#0B0F17"
+active_row_bg = "#384151"
+selection_bg  = "#273244"
+panel_bg      = "#090D14"
+# Paleta del tema "Gentle" de Pi, con cian apagado para el chrome de Herdr.
+accent   = "#9AD3E2"
+green    = "#CBEA85"
+blue     = "#8BC1D2"
+red      = "#CB7C94"
+yellow   = "#F0CD91"
+
+# ---------------------------------------------------------------------------
+# ATAJOS — idénticos a los de Gentleman
+# ---------------------------------------------------------------------------
+[keys]
+# Prefijo estilo tmux/Zellij (memoria muscular).
+prefix = "ctrl+a"
+
+# Navegación entre agentes de la barra lateral.
+# Se evita prefix+shift+j/k porque Herdr ya los usa para intercambiar paneles.
+previous_agent = "prefix+alt+k"
+next_agent     = "prefix+alt+j"
+
+# Saltar directo al agente N (1..9) según el orden de la barra lateral.
+focus_agent = "prefix+ctrl+1..9"
+
+# Abrir el dashboard de Claude Agents (historial + artifacts) sin click derecho.
+[[keys.command]]
+key = "prefix+alt+a"
+type = "shell"
+command = "herdr plugin action invoke open-dashboard --plugin spidysamurai.agents-tree"
+
+# Configurar el dashboard (ancho, límites, nivel de detalle) — no hay menú
+# nativo para acciones de plugin, solo se disparan por keybinding o CLI.
+[[keys.command]]
+key = "prefix+alt+c"
+type = "plugin_action"
+command = "spidysamurai.agents-tree.configure-dashboard"
+description = "Configurar dashboard de agentes"
+
+# ---------------------------------------------------------------------------
+# UI
+# ---------------------------------------------------------------------------
+[ui]
+accent = "#6FA0AF"
+
+# --- Ajustes propios para WSL2 (no están en el config de Gentleman) ---
+
+# Política de cursor. "auto" ya dibuja el cursor propio de Herdr en WSL para
+# evitar el parpadeo de cursor de ConPTY. Explícito para que no cambie.
+host_cursor = "auto"
+
+# Evita el redibujado completo al recuperar el foco de la ventana; es la causa
+# principal del flash al hacer alt-tab en Windows Terminal.
+redraw_on_focus_gained = false
+
+# Render más limpio: oculta la fila de pestañas cuando el space tiene una sola.
+hide_tab_bar_when_single_tab = true
+
+# ---------------------------------------------------------------------------
+# BARRA LATERAL — filas más informativas
+# ---------------------------------------------------------------------------
+
+# Spaces: nombre + rama de git y estado del repo.
+agent_panel_sort = "spaces"
+status_indicators = "symbols"
+show_agent_labels_on_pane_borders = true
+[ui.sidebar.spaces]
+rows = [
+  [{ token = "state_icon" }, { token = "workspace", fg = "#E7F0F5", bold = true }],
+  [{ token = "branch", fg = "#AABBC9", dim = false }, { token = "git_status", fg = "#CBEA85", dim = false }],
+]
+
+# Agentes: qué agente es y en qué estado está.
+[ui.sidebar.agents]
+rows = [
+  [{ token = "$state_working", fg = "#E0F2FE", bold = true, dim = false }, { token = "$state_done", fg = "#DCFCE7", bold = true, dim = false }, { token = "$state_blocked", fg = "#FFE4E6", bold = true, dim = false }, { token = "$state_idle", fg = "#DBEAFE", bold = true, dim = false }, { token = "$state_unknown", fg = "#EDE9FE", bold = true, dim = false }, { token = "workspace", fg = "#FFFFFF", bold = true, dim = false }, { token = "tab", fg = "#DCE7F0", dim = false }],
+  [{ token = "agent", fg = "#C7D3DC", dim = false }, { token = "state_text", fg = "#CBEA85", bold = true }],
+  [{ token = "$subagent_1", fg = "#AABBC9", dim = false }],
+  [{ token = "$subagent_2", fg = "#AABBC9", dim = false }],
+  [{ token = "$subagent_3", fg = "#AABBC9", dim = false }],
+  [{ token = "$subagent_4", fg = "#AABBC9", dim = false }],
+  [{ token = "$subagent_5", fg = "#AABBC9", dim = false }],
+  [{ token = "$subagent_6", fg = "#AABBC9", dim = false }],
+  [{ token = "$session_summary", fg = "#6FA0AF", dim = false }],
+]
+
+# Para Claude Code además el título del terminal, que dice en qué está.
+[ui.sidebar.agents.rows_by_agent]
+claude = [
+  [{ token = "$state_working", fg = "#E0F2FE", bold = true, dim = false }, { token = "$state_done", fg = "#DCFCE7", bold = true, dim = false }, { token = "$state_blocked", fg = "#FFE4E6", bold = true, dim = false }, { token = "$state_idle", fg = "#DBEAFE", bold = true, dim = false }, { token = "$state_unknown", fg = "#EDE9FE", bold = true, dim = false }, { token = "workspace", fg = "#FFFFFF", bold = true, dim = false }, { token = "tab", fg = "#DCE7F0", dim = false }],
+  [{ token = "terminal_title_stripped", fg = "#C7D3DC", dim = false }],
+  [{ token = "agent", fg = "#C7D3DC", dim = false }, { token = "state_text", fg = "#CBEA85", bold = true }],
+  [{ token = "$subagent_1", fg = "#AABBC9", dim = false }],
+  [{ token = "$subagent_2", fg = "#AABBC9", dim = false }],
+  [{ token = "$subagent_3", fg = "#AABBC9", dim = false }],
+  [{ token = "$subagent_4", fg = "#AABBC9", dim = false }],
+  [{ token = "$subagent_5", fg = "#AABBC9", dim = false }],
+  [{ token = "$subagent_6", fg = "#AABBC9", dim = false }],
+  [{ token = "$session_summary", fg = "#6FA0AF", dim = false }],
+]
+
+[ui.toast]
+delivery = "system"
+
+[ui.sound]
+enabled = true

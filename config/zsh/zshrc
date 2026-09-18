@@ -1,0 +1,123 @@
+# Spidy environment — Zsh configuration
+#
+# Portability contract: this file NEVER hardcodes a username, a home directory,
+# or a toolchain version. Every path derives from $HOME, and every tool-specific
+# line is guarded so a partial install still yields a working shell.
+
+# --- herdr autostart --------------------------------------------------------
+# Opt-in. Export SPIDY_HERDR_AUTOSTART=1 to have interactive shells hand off to
+# herdr. It must stay ABOVE the Powerlevel10k instant prompt: past that point
+# p10k redirects stdout and [[ -t 1 ]] stops being reliable.
+# Escape hatch once enabled: NO_HERDR=1 zsh
+() {
+  local herdr_bin="$HOME/.local/bin/herdr"
+  [[ -n "$SPIDY_HERDR_AUTOSTART" ]]  || return
+  [[ -z "$NO_HERDR" ]]               || return
+  [[ -o interactive ]]               || return
+  [[ -t 1 ]]                         || return
+  [[ -z "$HERDR_ENV" ]]              || return
+  [[ -z "$TMUX" && -z "$ZELLIJ" ]]   || return
+  [[ "$TERM_PROGRAM" != "vscode" ]]  || return
+  [[ -z "$VSCODE_INJECTION" ]]       || return
+  [[ -x "$herdr_bin" ]]              || return
+
+  # Load a dedicated agent key before exec, when one is configured.
+  if [[ -n "$SSH_AUTH_SOCK" && -n "$SPIDY_HERDR_SSH_KEY" && -f "$SPIDY_HERDR_SSH_KEY" ]]; then
+    if ! ssh-add -l 2>/dev/null | command grep -q "${SPIDY_HERDR_SSH_KEY:t}"; then
+      ssh-add "$SPIDY_HERDR_SSH_KEY" 2>/dev/null
+    fi
+  fi
+  exec "$herdr_bin"
+}
+# ----------------------------------------------------------------------------
+
+# Powerlevel10k instant prompt. Anything that may require console input
+# (password prompts, [y/n] confirmations) must go above this block.
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME="powerlevel10k/powerlevel10k"
+
+# Build the plugin list from what is actually present. A missing custom plugin
+# must never produce a startup warning.
+plugins=(git fzf sudo extract docker docker-compose)
+() {
+  local custom_plugin
+  for custom_plugin in zsh-autosuggestions zsh-syntax-highlighting; do
+    [[ -d "$ZSH/custom/plugins/$custom_plugin" ]] && plugins+=("$custom_plugin")
+  done
+}
+
+# Completions dropped in by tools such as herdr.
+[[ -d "$HOME/.zfunc" ]] && fpath=("$HOME/.zfunc" $fpath)
+
+[[ -r "$ZSH/oh-my-zsh.sh" ]] && source "$ZSH/oh-my-zsh.sh"
+
+# Prompt preferences. Run `p10k configure` to regenerate.
+[[ ! -f "$HOME/.p10k.zsh" ]] || source "$HOME/.p10k.zsh"
+
+# --- PATH -------------------------------------------------------------------
+# Every entry is $HOME-relative; nothing assumes a username or a version.
+export PATH="$HOME/.local/bin:$PATH"
+
+export NVM_DIR="$HOME/.nvm"
+[[ -s "$NVM_DIR/nvm.sh" ]] && \. "$NVM_DIR/nvm.sh"
+[[ -s "$NVM_DIR/bash_completion" ]] && \. "$NVM_DIR/bash_completion"
+
+export BUN_INSTALL="$HOME/.bun"
+[[ -d "$BUN_INSTALL/bin" ]] && export PATH="$BUN_INSTALL/bin:$PATH"
+[[ -s "$BUN_INSTALL/_bun" ]] && source "$BUN_INSTALL/_bun"
+
+export PNPM_HOME="$HOME/.local/share/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+
+# Go from the official tarball takes precedence over any distro package.
+[[ -d "$HOME/.local/go/bin" ]] && export PATH="$HOME/.local/go/bin:$PATH"
+export GOPATH="$HOME/go"
+[[ -d "$GOPATH/bin" ]] && export PATH="$GOPATH/bin:$PATH"
+
+[[ -d "$HOME/.cargo/bin" ]] && export PATH="$HOME/.cargo/bin:$PATH"
+[[ -d "$HOME/.opencode/bin" ]] && export PATH="$HOME/.opencode/bin:$PATH"
+
+# --- modern CLI aliases -----------------------------------------------------
+# Each alias is guarded: a partial install must not break cat, ls, grep or find.
+(( $+commands[batcat] )) && alias cat='batcat'
+(( $+commands[rg] ))     && alias grep='rg'
+(( $+commands[fdfind] )) && alias find='fdfind'
+if (( $+commands[eza] )); then
+  alias ls='eza --icons --group-directories-first'
+  alias ll='eza -lh --icons --group-directories-first'
+  alias la='eza -la --icons --group-directories-first'
+fi
+
+# --- tool initialization ----------------------------------------------------
+(( $+commands[zoxide] )) && eval "$(zoxide init zsh)"
+(( $+commands[direnv] )) && eval "$(direnv hook zsh)"
+(( $+commands[ng] ))     && source <(ng completion script)
+
+lg() {
+  command -v lazygit >/dev/null 2>&1 && lazygit "$@"
+}
+
+# --- persistent ssh-agent ---------------------------------------------------
+# One shared socket across terminals.
+# ~/.ssh may not exist yet on a fresh machine; ssh-agent cannot bind without it.
+[[ -d "$HOME/.ssh" ]] || mkdir -p -m 700 "$HOME/.ssh"
+export SSH_AUTH_SOCK="$HOME/.ssh/agent.sock"
+if (( $+commands[ssh-add] && $+commands[ssh-agent] )); then
+  ssh-add -l >/dev/null 2>&1
+  if (( $? >= 2 )); then
+    rm -f "$SSH_AUTH_SOCK"
+    eval "$(ssh-agent -a "$SSH_AUTH_SOCK")" >/dev/null 2>&1
+  fi
+fi
+
+# --- local overrides --------------------------------------------------------
+# Machine-specific settings, secrets, work identities and per-host aliases
+# belong here. This file is never versioned.
+[[ -r "$HOME/.zshrc.local" ]] && source "$HOME/.zshrc.local"
