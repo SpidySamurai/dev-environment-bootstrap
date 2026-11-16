@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-# T2: privileges are negotiated exactly once, up front, before any module
+# Privileges are negotiated exactly once, up front, before any module
 # runs. Individual modules never trigger a fresh interactive sudo prompt.
 
 PRIVILEGES_AVAILABLE=${PRIVILEGES_AVAILABLE:-0}
 SUDO_KEEPALIVE_PID=""
 
-# BUG 1 fix: `[[ -r /dev/tty ]]` only checks file-permission bits — it can
+# `[[ -r /dev/tty ]]` only checks file-permission bits — it can
 # report true even when there is no real controlling terminal (e.g. under
 # `curl | bash`, setsid, or a detached session), because the device node is
 # still readable by the user even though opening it fails. Actually

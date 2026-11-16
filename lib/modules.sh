@@ -297,8 +297,8 @@ module_init() {
   MODULE_COMMANDS[angular-cli]='ng'
   MODULE_ALLOW_ALTERNATE_SOURCE[angular-cli]=1
 
-  # T8: installs the versioned config/ tree (zsh, zellij, herdr, agent CLI
-  # configs) onto $HOME, backing up any existing destination first. Unlike
+  # Installs the versioned config/ tree (zsh, Powerlevel10k, zellij, herdr)
+  # onto $HOME, backing up any existing destination first. Unlike
   # a package module it always re-applies (see module_installed in
   # lib/installer.sh): re-running it is how the host picks up an updated
   # config/ tree, and every run still backs up whatever it replaces.
@@ -366,7 +366,7 @@ expand_requested_modules() {
   done
 }
 
-# The default flow (T3) installs the complete environment: every optional
+# The default flow installs the complete environment: every optional
 # module, resolved through the same dependency graph as an explicit
 # --modules request. --modules remains the advanced escape hatch for a
 # partial install.

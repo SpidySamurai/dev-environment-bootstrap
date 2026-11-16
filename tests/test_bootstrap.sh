@@ -586,7 +586,7 @@ test_execute_plan_reports_skipped_and_manual_modules() {
   assert_contains 'skipped' "$output" "already-installed modules are reported as skipped"
 }
 
-# BUG 3: captured module stderr went into the report Detail column verbatim.
+# Regression: captured module stderr went into the report Detail column verbatim.
 # A tool like curl redraws its progress meter in place using carriage
 # returns, not newlines, so the whole meter is one giant "line" that blew out
 # the fixed-width installation report table.
@@ -697,7 +697,7 @@ test_negotiate_privileges_acquires_and_releases_keepalive() {
   fi
 }
 
-# BUG 1: negotiate_privileges branched on has_readable_tty, which tested
+# Regression: negotiate_privileges branched on has_readable_tty, which tested
 # `[[ -r /dev/tty ]]` — file-permission bits, not whether a controlling
 # terminal could actually be opened. Under `curl | bash` with no controlling
 # terminal, -r can still report true, so the installer took the interactive

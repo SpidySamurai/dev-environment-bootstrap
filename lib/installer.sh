@@ -127,7 +127,7 @@ module_install_status() {
 
 # npm-kind modules must not assume nvm is the npm provider: if node/npm already
 # exist from apt, fnm, volta, or any other source, sourcing a non-existent
-# ~/.nvm/nvm.sh must not break the module (see T5 latent-bug fix).
+# ~/.nvm/nvm.sh must not break the module.
 npm_provider_is_nvm() {
   local nvm_dir=${NVM_DIR:-$HOME/.nvm}
   [[ -s "$nvm_dir/nvm.sh" ]]
@@ -193,7 +193,7 @@ install_go_binary() {
 }
 
 # The actual install commands for a module, isolated from status/skip/dry-run
-# handling so callers can capture failures per module (see T1).
+# handling so callers can capture failures per module.
 perform_module_install() {
   local module=$1 kind=$2
   case "$kind" in
@@ -367,7 +367,7 @@ config_path_exists() {
 }
 
 # Reduces captured module stderr to a single readable line for the execution
-# report's Detail column (see BUG 3). A tool like curl redraws its progress
+# report's Detail column. A tool like curl redraws its progress
 # meter in place using carriage returns rather than newlines; captured
 # verbatim, the whole meter becomes one enormous "line" with no \n in it,
 # which blows out a fixed-width table. This strips ANSI escapes, treats \r as

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# T8: installs the versioned config/ tree onto the host.
+# Installs the versioned config/ tree onto the host.
 #
 # Two behaviours are mandatory:
 #   1. Backups. Any existing destination file is backed up to

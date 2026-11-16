@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# T3: the default path is a single yes/no confirmation, not a multi-select
+# The default path is a single yes/no confirmation, not a multi-select
 # menu. All interactive reads come from /dev/tty (never stdin), so
 # `curl -fsSL <url> | bash` keeps working: stdin is the piped script, and
 # only /dev/tty can carry a real answer.
