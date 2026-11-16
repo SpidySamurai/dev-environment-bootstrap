@@ -123,7 +123,7 @@ All are selected by default (the complete-environment flow); narrow the selectio
 | `github-cli` | GitHub CLI |
 | `angular-cli` | Angular CLI (`ng`, via nvm's global npm) |
 | `zsh-autosuggestions`, `zsh-syntax-highlighting` | Oh My Zsh custom plugins |
-| `agent-gentle-ai`, `agent-pi`, `agent-codex`, `agent-claude-code`, `agent-opencode`, `agent-herdr` | Coding-agent CLIs |
+| `agent-gentle-ai`, `agent-pi`, `agent-codex`, `agent-claude-code`, `agent-opencode`, `agent-herdr` | Coding-agent CLIs, configured afterwards by gentle-ai (see [Agent configuration](#agent-configuration)) |
 | `spidy-config` | The versioned `config/` tree (see [Configuration](#configuration) below) |
 
 Dependencies are data-driven: selecting Docker pulls in its package prerequisites, and selecting an npm-installed agent pulls in `node-nvm`. `--modules all` (the default, complete-environment flow) selects every optional module, including `spidy-config`.
@@ -148,6 +148,16 @@ Any file already at one of those destinations is backed up first, to `<file>.bak
 **`~/.zshrc.local` is yours.** The shipped `.zshrc` sources `~/.zshrc.local` if it exists and is never versioned — put secrets, work-specific identities, and machine-specific settings there.
 
 Deselect `spidy-config` (`--modules` without it) to skip all of this and fall back to the built-in guarded minimal Zsh configuration described in [Shell configuration and fonts](#shell-configuration-and-fonts).
+
+### Agent configuration
+
+This repository installs the coding-agent CLIs (Claude Code, Codex, OpenCode, Pi and Herdr) and `gentle-ai`, but ships no agent configuration of its own: no skills, sub-agents, commands, prompts, memory setup or settings files. Agent configuration comes from [gentle-ai](https://github.com/Gentleman-Programming/gentle-ai). Once the installer finishes, run:
+
+```bash
+gentle-ai install
+```
+
+or `gentle-ai` on its own for the interactive setup. The `spidy-config` module never writes agent configuration into `~/.claude`, `~/.codex`, `~/.config/opencode` or `~/.pi`; whatever lands there comes from the agent CLIs' own installers or from gentle-ai.
 
 ## Supported scope
 
