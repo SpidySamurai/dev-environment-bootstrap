@@ -25,18 +25,21 @@ declare -A MODULE_BINARY_PATH=()
 declare -A MODULE_GO_PACKAGE=()
 declare -A MODULE_INTERPRETER=()
 
-# Measured, versioned sources for kinds that download a specific artifact
-# (see the T4 catalog-vs-reality table in odd/tasks/spidy-environment-installer.md).
-readonly ZELLIJ_RELEASE_URL='https://github.com/zellij-org/zellij/releases/latest/download/zellij-x86_64-unknown-linux-musl.tar.gz'
+# Versioned sources for kinds that download a specific artifact. Bump these
+# deliberately: a pinned release installs the same binary on every machine.
+readonly ZELLIJ_VERSION='0.46.0'
+readonly ZELLIJ_RELEASE_URL="https://github.com/zellij-org/zellij/releases/download/v${ZELLIJ_VERSION}/zellij-x86_64-unknown-linux-musl.tar.gz"
 readonly GO_VERSION='1.27.1'
 readonly GO_TARBALL_URL="https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
 readonly PNPM_INSTALL_URL='https://get.pnpm.io/install.sh'
 
 # These agent CLIs ship their own installer scripts rather than a package
-# registry entry. Each URL below was independently verified (HTTP 200,
-# matches the vendor's documented Linux install command) before being wired
-# up; see the verified-sources table in
-# odd/tasks/spidy-environment-installer.md for the evidence per module.
+# registry entry. Each URL is the vendor's documented Linux install command.
+#
+# gentle-ai stays on main on purpose: its installer resolves and downloads the
+# latest stable release itself, whatever ref the script comes from, so a
+# tagged script URL would not pin the installed version. It would only run an
+# older copy of the installer against newer releases.
 readonly GENTLE_AI_INSTALL_URL='https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/scripts/install.sh'
 readonly CLAUDE_CODE_INSTALL_URL='https://claude.ai/install.sh'
 readonly OPENCODE_INSTALL_URL='https://opencode.ai/install'
@@ -87,6 +90,8 @@ module_init() {
   MODULE_GROUP[oh-my-zsh]='Mandatory baseline'
   MODULE_DEPS[oh-my-zsh]='zsh'
   MODULE_KIND[oh-my-zsh]=oh-my-zsh
+  # Oh My Zsh publishes no tags or releases, and its installer clones master
+  # anyway, so there is no stable ref to pin to.
   MODULE_URL[oh-my-zsh]='https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh'
   MODULE_PATH[oh-my-zsh]='$HOME/.oh-my-zsh'
 
