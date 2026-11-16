@@ -59,6 +59,11 @@ After installing, poke at what landed:
 Nothing here touches your real machine. Type exit to destroy the container.
 HELP
 chown tester:tester /home/tester/TRY-ME
+
+echo
+cat /home/tester/TRY-ME
+echo
+exec su - tester -c 'export PATH="$HOME/.local/bin:$PATH"; exec bash -i'
 INNER
 )
 
@@ -66,4 +71,4 @@ printf '==> starting %s (this takes a minute the first time)\n' "$IMAGE" >&2
 exec docker run --rm -it "${DNS_ARGS[@]}" \
   -v "$ROOT_DIR":/src:ro \
   "$IMAGE" \
-  bash -c "$setup"'; echo; cat /home/tester/TRY-ME; echo; exec su - tester -c 'export PATH="$HOME/.local/bin:$PATH"; exec bash -i''
+  bash -c "$setup"
