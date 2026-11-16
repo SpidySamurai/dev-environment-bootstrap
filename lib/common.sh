@@ -84,7 +84,8 @@ run_remote_script() {
 source_nvm() {
   local nvm_dir=${NVM_DIR:-"$HOME/.nvm"}
   if [[ -s "$nvm_dir/nvm.sh" ]]; then
-    # shellcheck disable=SC1090
+    # nvm.sh lives on the host, not in this repository.
+    # shellcheck source=/dev/null
     . "$nvm_dir/nvm.sh"
     return 0
   fi

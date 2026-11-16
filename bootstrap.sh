@@ -145,6 +145,8 @@ bootstrap_ensure_path() {
 
   local rc_file line
   rc_file=$(bootstrap_shell_rc_file)
+  # Written literally so the shell expands it at login, not now.
+  # shellcheck disable=SC2016
   line='export PATH="$HOME/.local/bin:$PATH"'
 
   if [[ -f "$rc_file" ]] && grep -qF "$line" "$rc_file" 2>/dev/null; then

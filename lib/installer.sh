@@ -76,6 +76,8 @@ module_installed() {
   local module=$1 kind=${MODULE_KIND[$1]}
   case "$kind" in
     apt)
+      # The catalog stores packages as a space-separated list; splitting it is intended.
+      # shellcheck disable=SC2086
       command -v dpkg-query >/dev/null 2>&1 && packages_installed ${MODULE_PACKAGES[$module]}
       ;;
     oh-my-zsh|git-theme|git-clone)
@@ -197,6 +199,8 @@ perform_module_install() {
   case "$kind" in
     apt)
       [[ $module == base-packages ]] && apt_update
+      # The catalog stores packages as a space-separated list; splitting it is intended.
+      # shellcheck disable=SC2086
       apt_install ${MODULE_PACKAGES[$module]}
       ;;
     oh-my-zsh)
@@ -269,7 +273,7 @@ install_module() {
 }
 
 audit_module_status() {
-  local module=$1 kind=${MODULE_KIND[$1]} missing_commands=''
+  local module=$1 kind=${MODULE_KIND[$1]} missing_list=''
   if [[ $kind == guidance ]]; then
     printf '%s\n' 'manual/host configuration required'
   elif [[ $kind == config-tree ]]; then
@@ -282,12 +286,12 @@ audit_module_status() {
     if ! module_has_command_evidence "$module" || module_command_evidence_complete "$module"; then
       printf '%s\n' 'installed (managed source)'
     else
-      missing_commands=$(module_missing_commands "$module" || true)
-      printf 'partial (managed source; missing commands: %s)\n' "$missing_commands"
+      missing_list=$(module_missing_commands "$module" || true)
+      printf 'partial (managed source; missing commands: %s)\n' "$missing_list"
     fi
   elif module_has_command_evidence "$module"; then
-    missing_commands=$(module_missing_commands "$module" || true)
-    if [[ -z $missing_commands ]]; then
+    missing_list=$(module_missing_commands "$module" || true)
+    if [[ -z $missing_list ]]; then
       if [[ ${MODULE_ALLOW_ALTERNATE_SOURCE[$module]-0} == 1 ]]; then
         printf '%s\n' 'installed (alternate source)'
       else
@@ -295,9 +299,9 @@ audit_module_status() {
       fi
     elif module_any_command_available "$module"; then
       if [[ ${MODULE_ALLOW_ALTERNATE_SOURCE[$module]-0} == 1 ]]; then
-        printf 'partial (alternate source; missing commands: %s)\n' "$missing_commands"
+        printf 'partial (alternate source; missing commands: %s)\n' "$missing_list"
       else
-        printf 'partial (managed source not detected; missing commands: %s)\n' "$missing_commands"
+        printf 'partial (managed source not detected; missing commands: %s)\n' "$missing_list"
       fi
     else
       printf '%s\n' 'missing'
@@ -319,7 +323,7 @@ count_audit_status() {
 }
 
 audit_environment() {
-  local module status scope
+  local module status
   local mandatory_managed=0 mandatory_alternate=0 mandatory_partial=0 mandatory_missing=0 mandatory_manual=0
   local optional_managed=0 optional_alternate=0 optional_partial=0 optional_missing=0 optional_manual=0
 

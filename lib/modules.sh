@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# The catalog arrays are read by lib/installer.sh and lib/ui.sh (SC2034), and
+# install paths keep $HOME literal until install time (SC2016).
+# shellcheck disable=SC2034,SC2016
 
 # Module metadata is intentionally declarative: selection, dependency resolution,
 # plan rendering, and installation all use this single catalog.

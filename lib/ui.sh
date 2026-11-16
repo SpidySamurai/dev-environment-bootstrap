@@ -91,7 +91,8 @@ module_panel_marker() {
 }
 
 module_panel_label() {
-  local module=$1 label=${MODULE_TITLE[$module]:-$module}
+  local module=$1
+  local label=${MODULE_TITLE[$module]:-$module}
   is_mandatory_module "$module" && label+=' (mandatory)'
   label+="$(module_panel_marker "$module")"
   printf '%s' "$label"

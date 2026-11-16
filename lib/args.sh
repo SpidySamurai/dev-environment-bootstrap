@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# The option globals set here are read by install.sh and lib/installer.sh.
+# shellcheck disable=SC2034
 
 DRY_RUN=0
 NON_INTERACTIVE=0

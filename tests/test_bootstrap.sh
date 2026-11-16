@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Tests define stub functions that the sourced code under test calls (SC2329,
+# SC2032), and change globals inside $( ) subshells on purpose so each test
+# leaves no state behind (SC2030, SC2031).
+# shellcheck disable=SC2329,SC2032,SC2030,SC2031
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -305,6 +309,8 @@ test_unknown_module_rejected() {
 test_confirm_full_install_does_not_mutate_before_answered() {
   local output rc=0
   output=$({
+    # An empty PATH proves no external command runs before the answer.
+    # shellcheck disable=SC2123
     PATH=''
     has_readable_tty() { return 0; }
     prompt_full_install_confirmation() { printf 'n'; }
@@ -428,7 +434,10 @@ test_module_path_probe_uses_catalog_metadata() {
   local original_powerlevel10k_path=${MODULE_PATH[powerlevel10k]}
 
   HOME=$ROOT_DIR
+  # Catalog paths keep $HOME literal; module_installed expands it.
+  # shellcheck disable=SC2016
   MODULE_PATH[oh-my-zsh]='$HOME'
+  # shellcheck disable=SC2016
   MODULE_PATH[powerlevel10k]='$HOME'
 
   if module_installed oh-my-zsh; then
@@ -1033,6 +1042,8 @@ test_oh_my_zsh_pins_its_install_directory() {
 
   output=$({
     HOME=$fake_home
+    # Simulates a ZSH value inherited from the caller, which must be ignored.
+    # shellcheck disable=SC2034
     ZSH=/somewhere/else/.oh-my-zsh
     run_remote_script() { printf 'RAN %s\n' "$*"; return 0; }
     perform_module_install oh-my-zsh oh-my-zsh
@@ -1333,6 +1344,8 @@ test_bootstrap_ensure_path_appends_when_missing() {
   assert_contains 'Added ~/.local/bin to PATH' "$output" "a missing ~/.local/bin on PATH is reported and fixed"
   assert_contains 'EXIT=0' "$output" "ensuring PATH succeeds"
   local occurrences
+  # The pattern matches the literal line, so nothing may expand here.
+  # shellcheck disable=SC2016
   occurrences=$(grep -c 'export PATH="\$HOME/.local/bin:\$PATH"' "$fake_home/.bashrc")
   assert_eq '1' "$occurrences" "the PATH export line is added exactly once, even across repeated runs"
   rm -rf "$fake_home"

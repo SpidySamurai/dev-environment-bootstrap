@@ -22,6 +22,8 @@ sudo_available() {
 # Isolated so tests can exercise the negotiation logic without a real
 # controlling terminal: /dev/tty is only opened here.
 request_sudo_interactively() {
+  # The prompt must read from the terminal, not from sudo's privileges.
+  # shellcheck disable=SC2024
   sudo -v </dev/tty
 }
 
