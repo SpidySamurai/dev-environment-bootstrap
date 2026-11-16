@@ -113,8 +113,18 @@ test_dry_run_entrypoint() {
 }
 
 test_dry_run_entrypoint_skips_managed_source_modules() {
-  local output
-  output=$(bash "$ROOT_DIR/install.sh" --dry-run --non-interactive --modules agent-pi 2>&1)
+  local output fake_root
+  # Fake a global npm install of Pi (package and command), so the test does not
+  # depend on whether the machine running it happens to have Pi installed.
+  fake_root=$(mktemp -d)
+  mkdir -p "$fake_root/node_modules/@earendil-works/pi-coding-agent" "$fake_root/bin"
+  printf '%s\n' '{"name":"@earendil-works/pi-coding-agent"}' \
+    >"$fake_root/node_modules/@earendil-works/pi-coding-agent/package.json"
+  printf '%s\n' '#!/bin/sh' 'exit 0' >"$fake_root/bin/pi"
+  chmod +x "$fake_root/bin/pi"
+  output=$(NODE_PATH="$fake_root/node_modules" PATH="$fake_root/bin:$PATH" \
+    bash "$ROOT_DIR/install.sh" --dry-run --non-interactive --modules agent-pi 2>&1)
+  rm -rf "$fake_root"
 
   assert_contains 'Skipping agent-pi: installed (managed source).' "$output" "dry-run entrypoint skips managed-source modules"
   assert_not_contains 'npm install -g @earendil-works/pi-coding-agent' "$output" "dry-run entrypoint does not plan managed-source module installation"
