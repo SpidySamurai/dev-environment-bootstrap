@@ -12,7 +12,7 @@ Supported: Ubuntu 24.04 on native Linux or WSL2. Any other system stops with a c
 ## Quick start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SpidySamurai/dev-environment-bootstrap/master/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/SpidySamurai/dev-environment-bootstrap/main/bootstrap.sh | bash
 spidy-environment
 ```
 
@@ -114,7 +114,7 @@ shellcheck install.sh bootstrap.sh lib/*.sh tests/*.sh
 ./tests/try-in-wsl.sh                              # throwaway WSL2 distribution
 ```
 
-CI runs ShellCheck (pinned to v0.11.0) and the test suite on every push and pull request to `master`. The sandbox scripts install from a snapshot of your working tree, uncommitted changes included, and leave your own environment untouched.
+CI runs ShellCheck (pinned to v0.11.0) and the test suite on every push and pull request to `main`. The sandbox scripts install from a snapshot of your working tree, uncommitted changes included, and leave your own environment untouched.
 
 ## License
 

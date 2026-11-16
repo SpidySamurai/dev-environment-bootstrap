@@ -2,7 +2,7 @@
 # spidy-environment one-liner bootstrap.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/SpidySamurai/dev-environment-bootstrap/master/bootstrap.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/SpidySamurai/dev-environment-bootstrap/main/bootstrap.sh | bash
 #
 # This script is designed to run through a pipe, so stdin is the script
 # itself: it never reads from stdin and it is fully non-interactive. It
