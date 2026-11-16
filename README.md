@@ -5,6 +5,8 @@ A Bash installer that turns a fresh Ubuntu 24.04 machine, native or WSL2, into a
 [![CI](https://github.com/SpidySamurai/dev-environment-bootstrap/actions/workflows/ci.yml/badge.svg)](https://github.com/SpidySamurai/dev-environment-bootstrap/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+![dev-environment-bootstrap cover: the repository name and tagline next to the real output of spidy-environment --dry-run in an Ubuntu 24.04 container, from the installation summary of 27 modules to the line saying no installation commands were executed.](.github/readme/cover.png)
+
 It installs my daily toolchain: Zsh with Oh My Zsh and Powerlevel10k, modern CLI tools, terminal multiplexers, Docker, language runtimes and the coding-agent CLIs, plus my shell and terminal dotfiles. It is opinionated and built for my own machines, and published so anyone rebuilding a Linux or WSL2 setup can read the approach, run it, or fork the catalog. Everything it can do is plain Bash in this repository, and it shows the full plan before it changes anything.
 
 Supported: Ubuntu 24.04 on native Linux or WSL2. Any other system stops with a clear error before installing anything.
