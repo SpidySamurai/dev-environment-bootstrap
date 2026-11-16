@@ -7,8 +7,8 @@
 .atl/
 
 # --- Credential guard -------------------------------------------------------
-# config/ ships agent configuration, never agent credentials. These patterns
-# are a safety net for future re-syncs of the config tree: if any of these ever
+# config/ ships dotfiles, never credentials. These patterns are a
+# safety net for future re-syncs of the config tree: if any of these ever
 # appear, they must not be committed to a public repository.
 **/.credentials.json
 **/credentials.json
@@ -24,10 +24,18 @@
 **/history.jsonl
 **/*.bak
 **/*.bak.*
-config/agents/*/sessions/
-config/agents/*/projects/
-config/agents/*/cache/
 
 # Internal working notes: they reference the author's absolute paths and would
 # ship to every user's checkout. Kept local, never published.
 /odd/
+
+# --- Agent configuration guard ---------------------------------------------
+# Coding agents are configured by gentle-ai on each machine. No agent
+# configuration or agent instructions are committed here, at any level.
+/config/agents/
+.claude/
+.codex/
+.cursor/
+**/.github/copilot-instructions.md
+CLAUDE.md
+AGENTS.md
