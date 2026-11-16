@@ -138,7 +138,11 @@ directory_snapshot() {
 }
 
 test_audit_entrypoint_is_read_only() {
-  local audit_home="$ROOT_DIR/tests/fixtures/audit-home" mock_bin="$ROOT_DIR/tests/fixtures/mock-bin" before after output
+  local audit_home mock_bin="$ROOT_DIR/tests/fixtures/mock-bin" before after output
+  # A real, non-empty HOME, so the before/after snapshot can detect writes.
+  audit_home=$(mktemp -d)
+  mkdir -p "$audit_home/.config"
+  printf '%s\n' '# existing user config' >"$audit_home/.zshrc"
   before=$(directory_snapshot "$audit_home")
 
   if ! output=$( 
@@ -152,6 +156,7 @@ test_audit_entrypoint_is_read_only() {
   ); then
     printf '%s\n' 'FAIL: --audit exits successfully without installation' >&2
     failures=$((failures + 1))
+    rm -rf "$audit_home"
     return
   fi
 
@@ -174,6 +179,7 @@ test_audit_entrypoint_is_read_only() {
   else
     printf '%s\n' 'PASS: --audit does not invoke installation, interactive, or npm commands'
   fi
+  rm -rf "$audit_home"
 }
 
 test_npm_module_probe_does_not_invoke_npm() {
