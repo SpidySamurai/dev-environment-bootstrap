@@ -132,7 +132,7 @@ These are the tools I reach for daily. They're not the only good options — swa
 
 ## Configuration
 
-By default (the `spidy-config` module, selected like any other optional module), the installer also places my versioned dotfiles and agent-CLI configs on the host:
+By default (the `spidy-config` module, selected like any other optional module), the installer also places my versioned shell and terminal dotfiles on the host:
 
 | Source | Destination |
 | --- | --- |
@@ -140,17 +140,10 @@ By default (the `spidy-config` module, selected like any other optional module),
 | `config/zsh/p10k.zsh` | `~/.p10k.zsh` |
 | `config/zellij/config.kdl` | `~/.config/zellij/config.kdl` |
 | `config/herdr/config.toml` | `~/.config/herdr/config.toml` |
-| `config/agents/claude/` | `~/.claude/` (merged: agents, commands, skills, output-styles, hooks, MCP config, `CLAUDE.md`, `RTK.md`) |
-| `config/agents/claude/settings.template.json` | `~/.claude/settings.json` |
-| `config/agents/codex/` | `~/.codex/` |
-| `config/agents/opencode/` | `~/.config/opencode/` |
-| `config/agents/pi/` | `~/.pi/` |
 
 Any file already at one of those destinations is backed up first, to `<file>.bak.<UTC timestamp>` — nothing is silently overwritten. Because this module re-applies the versioned tree, re-running it (for example after a `git pull` picks up a config update) creates a fresh backup each time.
 
 **Authentication stays manual.** This module never installs secrets: no API keys, no provider login, no SSH keys. Run `gh auth login`, each agent CLI's own login command, and set up SSH keys yourself, same as always.
-
-**Not every hook ships.** My personal `~/.claude/settings.json` has 36 hooks; only the 7 backed by tools this installer actually provides (`gentle-ai`, `herdr`) are in `config/agents/claude/settings.template.json`. The other 29 are deliberately excluded because they point at personal projects (`~/.pixel-agents`, `~/testing-stuff`) or at tools this bootstrap does not install (`moshi-hook`, `rtk`, `codegraph`).
 
 **`~/.zshrc.local` is yours.** The shipped `.zshrc` sources `~/.zshrc.local` if it exists and is never versioned — put secrets, work-specific identities, and machine-specific settings there.
 
@@ -194,19 +187,6 @@ WSL Docker integration, systemd enablement, and adding a user to the `docker` gr
 ## Security and trust boundaries
 
 `bootstrap.sh` performs exactly one privileged step before anything else runs: installing `git` via apt, and only if it is missing. From there, `install.sh` resolves and prints the complete plan before it asks for confirmation; no host mutation happens before that confirmation. `--yes` and `--non-interactive` accept the displayed plan without a prompt. Package installation requires `sudo`, negotiated once up front by `lib/privileges.sh`; all privileged apt commands are centralized in `lib/common.sh` and visible in the dry-run plan. Remote runtime/bootstrap scripts use curl with `--fail --show-error --location --proto '=https' --tlsv1.2 --retry 3`. They require network access and execute only after confirmation and outside `--dry-run`; review their upstream URLs in `lib/modules.sh` before use.
-
-### Third-party plugin upstreams this install trusts
-
-The shipped Claude Code settings template pre-registers two plugin marketplaces and enables their plugins on every default install, because they are part of the environment being copied:
-
-| Plugin | Upstream | Namespace |
-| --- | --- | --- |
-| `engram@engram` | `Gentleman-Programming/engram` | third party |
-| `voicemode@voicemode` | `mbailey/voicemode` | third party, outside this repository's author |
-
-Both are declared by bare `owner/repo` with **no tag, commit, or checksum pin**, and Claude Code resolves each marketplace at plugin-load time rather than at install time. That means these upstreams track HEAD: content they publish later runs on your machine without any change to this repository, and the exposure persists after installation. Claude Code plugins can contribute hooks, commands, and agents, so this is a code-execution trust relationship, not just configuration.
-
-If you do not want that, remove the `enabledPlugins` and `extraKnownMarketplaces` entries from `config/agents/claude/settings.template.json` before running the installer, or delete them from `~/.claude/settings.json` afterwards. Engram is this environment's persistent memory, so removing it changes how the agents behave.
 
 ## Architecture
 

@@ -1038,46 +1038,6 @@ test_oh_my_zsh_pins_its_install_directory() {
 }
 
 test_install_script_modules_pipe_to_their_interpreter
-# Raised by the RDD reliability reviewer on the candidate that added these keys:
-# the shipped template had no check that it stays valid JSON or keeps the plugin
-# pointers. Without them a new user silently loses Engram, this environment's
-# persistent memory.
-assert_template_is_valid_json_with_plugins() {
-  local template=$1 label=$2 expect_valid=$3 output rc=0
-  output=$(python3 -c "
-import json,sys
-d=json.load(open(sys.argv[1]))
-assert d['enabledPlugins']['engram@engram'] is True
-assert d['enabledPlugins']['voicemode@voicemode'] is True
-assert d['extraKnownMarketplaces']['engram']['source']['repo']
-assert d['extraKnownMarketplaces']['voicemode']['source']['repo']
-" "$template" 2>&1) || rc=$?
-  if [[ $expect_valid == yes ]]; then
-    assert_eq '0' "$rc" "$label"
-  else
-    [[ $rc -ne 0 ]] && printf 'PASS: %s\n' "$label" || { printf 'FAIL: %s\n' "$label"; failures=$((failures + 1)); }
-  fi
-}
-
-test_shipped_claude_settings_template_keeps_its_plugins() {
-  local broken
-  assert_template_is_valid_json_with_plugins \
-    "$ROOT_DIR/config/agents/claude/settings.template.json" \
-    "the shipped Claude settings template is valid JSON and still enables Engram and voicemode" yes
-
-  # The guard is only worth having if it actually detects a regression.
-  broken=$(mktemp)
-  python3 -c "
-import json,sys
-d=json.load(open(sys.argv[1]))
-del d['enabledPlugins']['engram@engram']
-json.dump(d, open(sys.argv[2],'w'))
-" "$ROOT_DIR/config/agents/claude/settings.template.json" "$broken"
-  assert_template_is_valid_json_with_plugins "$broken" \
-    "the same guard fails when the Engram plugin pointer is dropped" no
-  rm -f "$broken"
-}
-
 test_oh_my_zsh_pins_its_install_directory
 # R2 / R3-template-guard-counter: the guard's negative control incremented an
 # upper-case counter the suite never reads, so it could print FAIL and still
@@ -1089,19 +1049,6 @@ test_every_failure_branch_uses_the_suite_counter() {
   assert_eq '' "$stray" "no failure branch increments a counter the suite never reads"
 }
 
-# R1-claude-plugin-autotrust: the template auto-enables two unpinned third-party
-# GitHub marketplaces. The operator must at least be told which upstreams the
-# install trusts, including the one outside the author's namespace.
-test_readme_discloses_the_auto_trusted_plugin_upstreams() {
-  local readme
-  readme=$(cat "$ROOT_DIR/README.md")
-  assert_contains 'Gentleman-Programming/engram' "$readme" \
-    "the README names the engram plugin upstream the install trusts"
-  assert_contains 'mbailey/voicemode' "$readme" \
-    "the README names the voicemode plugin upstream, which is outside the author's namespace"
-}
-
-test_shipped_claude_settings_template_keeps_its_plugins
 # Found by a clean full install in a container: rust was the only module that
 # failed, with `curl: (23) Failure writing output to destination`. Root cause is
 # a contract bug, not the network: run_remote_script could only forward ENV
@@ -1173,7 +1120,6 @@ test_execute_plan_does_not_claim_to_preserve_a_replaced_zshrc
 test_run_remote_script_separates_env_from_interpreter_arguments
 test_run_remote_script_still_forwards_env_assignments
 test_rust_module_invokes_its_interpreter_with_unattended_flags
-test_readme_discloses_the_auto_trusted_plugin_upstreams
 test_agent_codex_dry_run_plan_installs_via_npm
 test_install_script_dry_run_plan_prints_the_real_command
 test_opencode_installed_probe_uses_its_own_binary_path
@@ -1498,12 +1444,6 @@ test_config_install_all_places_expected_destinations() {
     ".p10k.zsh"
     ".config/zellij/config.kdl"
     ".config/herdr/config.toml"
-    ".claude/settings.json"
-    ".claude/CLAUDE.md"
-    ".claude/mcp/engram.json"
-    ".codex/AGENTS.md"
-    ".config/opencode/AGENTS.md"
-    ".pi/subagents.json"
   )
   local path all_present=1
   for path in "${expected[@]}"; do
@@ -1515,12 +1455,15 @@ test_config_install_all_places_expected_destinations() {
   done
   ((all_present)) && printf '%s\n' 'PASS: every mapped config destination is installed'
 
-  if [[ -e "$fake_home/.claude/settings.template.json" ]]; then
-    printf '%s\n' 'FAIL: the settings template is not copied under its template name' >&2
-    failures=$((failures + 1))
-  else
-    printf '%s\n' 'PASS: the settings template is not copied under its template name'
-  fi
+  # Agent configuration comes from gentle-ai, never from this tree.
+  for path in .claude .codex .config/opencode .pi; do
+    if [[ -e "$fake_home/$path" ]]; then
+      printf 'FAIL: the config tree installs no agent configuration (%s)\n' "$path" >&2
+      failures=$((failures + 1))
+    else
+      printf 'PASS: the config tree installs no agent configuration (%s)\n' "$path"
+    fi
+  done
   rm -rf "$fake_home"
 }
 

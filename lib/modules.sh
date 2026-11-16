@@ -294,7 +294,7 @@ module_init() {
   # a package module it always re-applies (see module_installed in
   # lib/installer.sh): re-running it is how the host picks up an updated
   # config/ tree, and every run still backs up whatever it replaces.
-  MODULE_TITLE[spidy-config]='Spidy versioned configs (zsh, zellij, herdr, agent CLI configs)'
+  MODULE_TITLE[spidy-config]='Spidy versioned configs (zsh, Powerlevel10k, zellij, herdr)'
   MODULE_GROUP[spidy-config]='Configuration'
   MODULE_KIND[spidy-config]=config-tree
 }
@@ -414,8 +414,8 @@ module_plan_lines() {
       printf '  Print Nerd Font installation and terminal-profile guidance.\n'
       ;;
     config-tree)
-      printf '  Install the versioned config/ tree onto $HOME (%s and merge %s), backing up any existing destination file first.\n' \
-        "${!CONFIG_FILE_MAP[*]}" "${!CONFIG_DIRECTORY_MAP[*]}"
+      printf '  Install the versioned config/ tree onto $HOME (%s), backing up any existing destination file first.\n' \
+        "${!CONFIG_FILE_MAP[*]}"
       ;;
   esac
 }

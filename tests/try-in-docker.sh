@@ -53,7 +53,7 @@ The bootstrap already ran. spidy-environment is on your PATH.
 After installing, poke at what landed:
 
   cat ~/.zshrc
-  ls ~/.claude ~/.codex ~/.config/zellij
+  ls ~/.config/zellij ~/.config/herdr
   zsh
 
 Nothing here touches your real machine. Type exit to destroy the container.
