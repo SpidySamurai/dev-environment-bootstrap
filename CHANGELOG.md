@@ -6,8 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-First tagged release, planned as v1.0.0. It covers all work since the first
-commit in September 2026.
+## [1.0.0] - 2026-11-16
+
+First tagged release. It covers all work since the first commit in September
+2026.
 
 ### Added
 
@@ -48,3 +50,6 @@ commit in September 2026.
   depends on Pi being installed on the machine running it.
 - ShellCheck findings, including a `local` declaration that read a variable
   before assigning it.
+
+[Unreleased]: https://github.com/SpidySamurai/dev-environment-bootstrap/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/SpidySamurai/dev-environment-bootstrap/releases/tag/v1.0.0
